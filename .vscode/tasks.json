@@ -6,14 +6,15 @@
         "env": {
             "ARDUINO_CLI": "F:\\Git\\arduino-cli\\arduino-cli.exe",
             "ARDUINO_CFG": "${workspaceFolder}\\arduino-cli.yaml",
-            "ARDUINO_FQBN": "esp32:esp32:esp32s3:FlashSize=16M"
+            "ARDUINO_FQBN": "esp32:esp32:esp32s3:FlashSize=16M",
+            "BUILD_ROOT": "${workspaceFolder}\\build"
         }
     },
     "tasks": [
         {
             "label": "编译 AI_KEY_v3",
             "type": "shell",
-            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path F:\\Git\\build\\AI_KEY_v3 --output-dir F:\\Git\\build\\out '${workspaceFolder}\\AI_KEY_v3'",
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\AI_KEY_v3\" --output-dir \"$env:BUILD_ROOT\\out\" '${workspaceFolder}\\AI_KEY_v3'",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -22,7 +23,7 @@
                 "owner": "cpp",
                 "fileLocation": [
                     "relative",
-                    "F:\\Git\\build\\AI_KEY_v3"
+                    "${workspaceFolder}\\build\\AI_KEY_v3"
                 ],
                 "pattern": [
                     {
@@ -45,10 +46,11 @@
             // 编译「当前打开的 .ino 所在的 sketch 文件夹」，可加 --clean 强制全量重编
             "label": "编译当前 sketch",
             "type": "shell",
-            "command": "$d = Split-Path -Parent $env:ACTIVE_SKETCH; & $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"F:\\Git\\build\\$d\" $d",
+            "command": "$d = Split-Path -Parent $env:ACTIVE_SKETCH; $n = Split-Path -Leaf $d; & $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\$n\" --output-dir \"$env:BUILD_ROOT\\out\" \"$d\"",
             "options": {
                 "env": {
-                    "ACTIVE_SKETCH": "${file}"
+                    "ACTIVE_SKETCH": "${file}",
+                    "BUILD_ROOT": "${workspaceFolder}\\build"
                 }
             },
             "group": "build",
@@ -59,13 +61,13 @@
         {
             "label": "清理编译缓存",
             "type": "shell",
-            "command": "Remove-Item -Recurse -Force F:\\Git\\build -ErrorAction SilentlyContinue; Write-Host '已清理 F:\\Git\\build'",
+            "command": "Remove-Item -Recurse -Force \"$env:BUILD_ROOT\" -ErrorAction SilentlyContinue; Write-Host \"已清理 $env:BUILD_ROOT\"",
             "problemMatcher": []
         },
         {
             "label": "上传到开发板",
             "type": "shell",
-            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG upload --fqbn $env:ARDUINO_FQBN --input-dir F:\\Git\\build\\out (Read-Host '串口号 (如 COM5)')",
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG upload --fqbn $env:ARDUINO_FQBN --input-dir \"$env:BUILD_ROOT\\out\" (Read-Host '串口号 (如 COM5)')",
             "problemMatcher": []
         },
         {
