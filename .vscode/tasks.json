@@ -1,0 +1,87 @@
+{
+    // 纯 VS Code 离线编译：arduino-cli + F:\Git\Arduino15 离线工具链
+    // Ctrl+Shift+B = 编译 AI_KEY_v3；终端里 "Run Task" 可选其他任务
+    "version": "2.0.0",
+    "options": {
+        "env": {
+            "ARDUINO_CLI": "F:\\Git\\arduino-cli\\arduino-cli.exe",
+            "ARDUINO_CFG": "${workspaceFolder}\\arduino-cli.yaml",
+            "ARDUINO_FQBN": "esp32:esp32:esp32s3:FlashSize=16M"
+        }
+    },
+    "tasks": [
+        {
+            "label": "编译 AI_KEY_v3",
+            "type": "shell",
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path F:\\Git\\build\\AI_KEY_v3 --output-dir F:\\Git\\build\\out '${workspaceFolder}\\AI_KEY_v3'",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": [
+                    "relative",
+                    "F:\\Git\\build\\AI_KEY_v3"
+                ],
+                "pattern": [
+                    {
+                        "regexp": "^(.*?):(\\d+):(\\d+):\\s+(fatal error|error|warning|note):\\s+(.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "severity": 4,
+                        "message": 5
+                    }
+                ]
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            // 编译「当前打开的 .ino 所在的 sketch 文件夹」，可加 --clean 强制全量重编
+            "label": "编译当前 sketch",
+            "type": "shell",
+            "command": "$d = Split-Path -Parent $env:ACTIVE_SKETCH; & $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"F:\\Git\\build\\$d\" $d",
+            "options": {
+                "env": {
+                    "ACTIVE_SKETCH": "${file}"
+                }
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "清理编译缓存",
+            "type": "shell",
+            "command": "Remove-Item -Recurse -Force F:\\Git\\build -ErrorAction SilentlyContinue; Write-Host '已清理 F:\\Git\\build'",
+            "problemMatcher": []
+        },
+        {
+            "label": "上传到开发板",
+            "type": "shell",
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG upload --fqbn $env:ARDUINO_FQBN --input-dir F:\\Git\\build\\out (Read-Host '串口号 (如 COM5)')",
+            "problemMatcher": []
+        },
+        {
+            "label": "串口监视器",
+            "type": "shell",
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG monitor --port (Read-Host '串口号') --baud 115200",
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "列出可用开发板",
+            "type": "shell",
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG board listall | Select-String esp32",
+            "problemMatcher": []
+        }
+    ]
+}

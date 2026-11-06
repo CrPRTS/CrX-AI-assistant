@@ -1,0 +1,9 @@
+# 编译产物 / 缓存
+build/
+.pio/
+.arduino/
+.tools/
+
+# PlatformIO（当前方案已改用 arduino-cli，保留以防回退）
+.clangd
+.vscode/cpptools*

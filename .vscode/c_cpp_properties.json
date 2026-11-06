@@ -1,0 +1,28 @@
+{
+    // IntelliSense 直接读取 arduino-cli 生成的 compile_commands.json，
+    // 因此编译一次之后，ESP32-S3 的头文件/宏定义就会与真实编译完全一致。
+    // 生成位置由 .vscode/tasks.json 的 --build-path 决定。
+    "configurations": [
+        {
+            "name": "Win32",
+            "compileCommands": "F:\\Git\\build\\AI_KEY_v3\\compile_commands.json",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "F:\\Git\\arduino-sketchbook\\libraries\\PN532-arduino\\src",
+                "F:\\Git\\arduino-sketchbook\\libraries\\NDEF",
+                "F:\\Git\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\cores\\esp32",
+                "F:\\Git\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.11\\libraries\\**"
+            ],
+            "defines": [
+                "NFC_INTERFACE_SPI",
+                "CONFIG_IDF_TARGET_ESP32S3",
+                "ARDUINO_ARCH_ESP32",
+                "ESP32"
+            ],
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++2b",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
