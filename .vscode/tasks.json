@@ -14,7 +14,8 @@
         {
             "label": "编译 AI_KEY_v3",
             "type": "shell",
-            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\AI_KEY_v3\" --output-dir \"$env:BUILD_ROOT\\out\" '${workspaceFolder}\\AI_KEY_v3'",
+            // 编译后刷新 IntelliSense 配置：includePath/defines 来自本次真实编译参数
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\AI_KEY_v3\" --output-dir \"$env:BUILD_ROOT\\out\" '${workspaceFolder}\\AI_KEY_v3'; if ($?) { & powershell -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}\\.vscode\\gen-intellisense.ps1\" }",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -57,6 +58,14 @@
             "problemMatcher": [
                 "$gcc"
             ]
+        },
+        {
+            // 只刷新 IntelliSense 配置（不重新编译）。改了 FQBN / 换库 / 升级工具链后，
+            // 先编译一次，再跑这个任务；随后执行命令面板里的 "C/C++: Reset IntelliSense Database"。
+            "label": "刷新 IntelliSense 配置",
+            "type": "shell",
+            "command": "& powershell -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}\\.vscode\\gen-intellisense.ps1\"",
+            "problemMatcher": []
         },
         {
             "label": "清理编译缓存",

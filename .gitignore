@@ -7,6 +7,3 @@ build/
 # PlatformIO（当前方案已改用 arduino-cli，保留以防回退）
 .clangd
 .vscode/cpptools*
-
-# 本机 VS Code 设置（终端自动批准规则等，不随仓库共享）
-.vscode/settings.json

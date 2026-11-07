@@ -31,7 +31,7 @@ Global variables use 23168 bytes (7%) of dynamic memory, leaving 304512 bytes.
 
 `Ctrl+Shift+B` → 编译 `AI_KEY_v3`（默认任务，见 [`.vscode/tasks.json`](./.vscode/tasks.json)）。
 
-其他任务：编译当前 sketch、清理缓存、上传、串口监视器、列出开发板。
+其他任务：编译当前 sketch、刷新 IntelliSense 配置、清理缓存、上传、串口监视器、列出开发板。
 
 命令行等价：
 
@@ -53,7 +53,25 @@ F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml upload `
 > 仓库外只有只读的工具链与库：`F:\Git\arduino-cli`、`F:\Git\Arduino15`、`F:\Git\arduino-sketchbook`。
 > （`%TEMP%` 里仍会有 PyInstaller 的瞬时解压文件，那是 Windows 临时目录，不是产物。）
 
-## 3. 仓库迁移到 `F:\Git` 之后
+## 3. IntelliSense（`.ino` 报「检测到 #include 错误」）
+
+`.vscode/c_cpp_properties.json` 是**生成物，不要手改**，由 [`.vscode/gen-intellisense.ps1`](./.vscode/gen-intellisense.ps1) 生成。
+
+为什么需要生成器：arduino-cli 产出的 `compile_commands.json` cpptools 用不了——
+
+* 它只登记 `build\AI_KEY_v3\sketch\AI_KEY_v3.ino.cpp`，没有 `AI_KEY_v3.ino`，所以总提示「未找到 AI_KEY_v3.ino，改用 includePath」；
+* 编译参数里的 include/define 全藏在 `@flags/includes`、`@flags/defines` 这类 **GCC 响应文件**里，cpptools 不展开；
+* 370 个 IDF 头目录写成 `-iprefix <根>` + `-iwithprefixbefore <相对路径>`，cpptools 也不处理。
+
+生成器读取真实编译参数，展开响应文件、还原 `-iwithprefixbefore`、补上交叉编译器的系统头目录，最后写出 385 个 include 目录 + 55 个宏。
+
+**何时需要重新生成**：换 FQBN、增删库、升级 core/工具链之后。`Ctrl+Shift+B` 已自动在编译成功后刷新；也可以单独跑任务「刷新 IntelliSense 配置」。
+
+另外必须保留 `__XTENSA__` 这组目标端宏（生成器自动注入）。否则 `xtensa/config/core.h` 会走 `#else` 分支去 `#include "../hal.h"`，`SPI.h` 那行就会报 1696「无法打开源文件 "../hal.h"」——这是假错，真编译器走的是 `#ifdef __XTENSA__` 分支。
+
+改完配置后如果红线没消失，执行命令面板的 **C/C++: Reset IntelliSense Database**（或重新加载窗口）。
+
+## 4. 仓库迁移到 `F:\Git` 之后
 
 仓库内的 [`arduino-cli.yaml`](./arduino-cli.yaml) 用的是绝对路径，迁移后**不用改**（工具链仍在 `F:\Git\Arduino15`）。
 只需把 `arduino-cli.yaml` 里的 `directories.data` / `user` 保持指向 `F:\Git\...` 即可。
@@ -65,7 +83,7 @@ F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml upload `
 3. 把 `PN532-arduino` 与 `NDEF` 放进 `<sketchbook>\libraries\`。
 4. `arduino-cli core list` 应显示 `esp32:esp32 3.3.11` 且无下载动作。
 
-## 4. 库版本的关键坑
+## 5. 库版本的关键坑
 
 工程用的是 **旧版** Seeed 库，`PN532Interface.h` 里**没有** `NFC_INTERFACE_*` 默认宏，
 `PN532_SPI.cpp` 整个文件包在 `#ifdef NFC_INTERFACE_SPI` 内，库自带的 `.o` 是空的。
@@ -80,7 +98,7 @@ F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml upload `
 GitHub 上的**新版** Seeed 库已在头文件里默认这些宏，那种情况下再 `#include .cpp` 会造成重复定义。
 **换库版本时必须同步改这段。**
 
-## 5. 已放弃的方案：PlatformIO
+## 6. 已放弃的方案：PlatformIO
 
 `platformio.ini` / `src/main.cpp` / `lib/` 是 PlatformIO 路线的遗留物，**当前不可用**：
 `dl.registry.platformio.org` 在本机只有 ~12 KB/s，`framework-arduinoespressif32` 始终下不完；
@@ -88,7 +106,7 @@ VS Code 的 PlatformIO 扩展还会常驻 `load_build_metadata` 进程抢占 `~/
 PlatformIO 路线遗留的 `.tools/`、`.arduino/` 已删除。如确认不再回退，可继续删除 `platformio.ini`、`src/`、`lib/`、`.pio/`。
 （注意 `lib/` 里是**新版** Seeed 库，与本文第 4 节描述的旧库不兼容，别混用。）
 
-## 6. 尚未验证
+## 7. 尚未验证
 
 - 只编译过 `AI_KEY_v3`。根目录的 `AI_KEY.ino`、`AI_KEY_v2.ino` 是散文件，arduino-cli 要求 `名字\名字.ino` 结构，需各自放进同名文件夹才能编译。
 - 未做过上板烧录与串口实测（当前机器只枚举到 COM1）。

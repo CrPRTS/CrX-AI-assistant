@@ -1,0 +1,6 @@
+{
+    // *.ino 按 C++ 处理，IntelliSense 才会套用 c_cpp_properties.json
+    "files.associations": {
+        "*.ino": "cpp"
+    }
+}
