@@ -1,17 +1,23 @@
-# 从 arduino-cli 生成的 compile_commands.json 生成 .vscode/c_cpp_properties.json
+# Generate .vscode/c_cpp_properties.json from arduino-cli's compile_commands.json
 #
-# 为什么需要这个脚本：
-#   arduino-cli 把 ESP-IDF 的 370 条 include 路径写在 gcc 响应文件里（@flags/includes，
-#   全是 -iwithprefixbefore 相对路径，配合 -iprefix 使用）。
-#   cpptools 的 IntelliSense 不展开 @响应文件、也不认 -iprefix/-iwithprefixbefore，
-#   所以直接把 compile_commands.json 丢给它，<mbedtls/md.h>、<esp_system.h> 一定找不到。
-#   这里把它们展开成绝对路径，再连同交叉编译器的系统头目录一起写进配置。
+# Why this script exists:
+#   arduino-cli hides the ESP-IDF include paths inside GCC response files
+#   (@flags/includes, ~370 entries written as -iwithprefixbefore <rel> plus a
+#   single -iprefix <root>). cpptools does not expand @response files and does
+#   not understand -iprefix / -iwithprefixbefore, so feeding it
+#   compile_commands.json directly leaves <mbedtls/md.h>, <esp_system.h>, ...
+#   unresolved. This script expands everything into absolute paths and also
+#   adds the cross toolchain's own system header directories.
 #
-# 用法（一般由 tasks.json 的「刷新 IntelliSense 配置」任务调用）：
+# NOTE: keep this file pure ASCII. Windows PowerShell 5.1 reads .ps1 files
+#   without a UTF-8 BOM as ANSI; any non-ASCII byte (e.g. a Chinese comment)
+#   can then be mis-decoded into a quote or a backslash and break the parser.
+#
+# Usage (normally invoked by the "Refresh IntelliSense config" task):
 #   powershell -NoProfile -ExecutionPolicy Bypass -File .vscode\gen-intellisense.ps1
-# 可选参数：
-#   -BuildDir  build\AI_KEY_v3   含 compile_commands.json 的目录
-#   -SketchDir AI_KEY_v3         sketch 源目录（用于把 .ino.cpp 映射回 .ino）
+# Optional parameters:
+#   -BuildDir  build\AI_KEY_v3   directory holding compile_commands.json
+#   -SketchDir AI_KEY_v3         sketch source directory
 
 [CmdletBinding()]
 param(
@@ -24,7 +30,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $dbPath = Join-Path $root $BuildDir | Join-Path -ChildPath 'compile_commands.json'
 
 if (-not (Test-Path $dbPath)) {
-    throw "找不到 $dbPath，请先执行一次编译（或「刷新 IntelliSense 配置」任务）。"
+    throw "Missing $dbPath - run a compile first (or the 'Refresh IntelliSense config' task)."
 }
 
 $db = Get-Content $dbPath -Raw | ConvertFrom-Json
@@ -32,7 +38,7 @@ $entry = $db | Where-Object { $_.file -like '*sketch*' } | Select-Object -First 
 if (-not $entry) { $entry = $db[0] }
 $args_ = @($entry.arguments)
 
-# ---- 展开 gcc 响应文件：把 @file 替换成文件内容里的 token ----
+# ---- Expand GCC response files: replace @file with the tokens inside it ----
 function Expand-Argv {
     param([string[]]$Argv)
     $out = [System.Collections.Generic.List[string]]::new()
@@ -41,7 +47,7 @@ function Expand-Argv {
             $rf = $a.Substring(1)
             if (Test-Path $rf) {
                 $tokens = (Get-Content $rf -Raw) -split '\s+' | Where-Object { $_ }
-                # 响应文件里的引号（-DXX=\"yy\"）需要还原
+                # restore quotes escaped in the response file (-DXX=\"yy\")
                 foreach ($t in $tokens) { $out.Add(($t -replace '\\"', '"')) }
             }
         }
@@ -51,7 +57,7 @@ function Expand-Argv {
 }
 $argv = Expand-Argv $args_
 
-# ---- -iprefix 基准目录（-iwithprefixbefore 的相对根）----
+# ---- -iprefix base directory (the root for -iwithprefixbefore) ----
 $iprefix = $null
 for ($i = 0; $i -lt $argv.Count; $i++) {
     if ($argv[$i] -eq '-iprefix') { $iprefix = $argv[$i + 1]; break }
@@ -63,7 +69,8 @@ $def = [System.Collections.Generic.List[string]]::new()
 for ($i = 0; $i -lt $argv.Count; $i++) {
     $a = $argv[$i]
     $next = if ($i + 1 -lt $argv.Count) { $argv[$i + 1] } else { $null }
-    # 注意：不要用 switch（默认大小写不敏感，'-I.' 会误匹配 '-iwithprefixbefore'）
+    # Do not use switch here: it is case-insensitive by default, and
+    # '-I.' would also match '-iwithprefixbefore'.
     $path = $null
     if ($a -ceq '-iwithprefixbefore') {
         if ($iprefix) { $path = $iprefix + $next }
@@ -77,18 +84,24 @@ for ($i = 0; $i -lt $argv.Count; $i++) {
 
     if ($path) {
         $p = $path -replace '/', '\'
-        # 去掉 .\ 之类的冗余段，便于去重
         try { $p = [System.IO.Path]::GetFullPath($p) } catch { }
         $inc.Add($p)
     }
 }
 
-# ---- 交叉编译器的系统头目录（<string.h>、<cstdint> 等）----
+# ---- Cross toolchain system header directories (<string.h>, <cstdint>, ...) ----
 $gxx = $argv[0]
-# compile_commands.json 里的编译器路径没有 .exe 后缀，Test-Path 会判 False
+# compile_commands.json stores the compiler path without the .exe suffix
 if (-not (Test-Path $gxx) -and (Test-Path "$gxx.exe")) { $gxx = "$gxx.exe" }
+$compilerPath = $null
 if (Test-Path $gxx) {
     $gxxFull = (Resolve-Path $gxx).Path
+    # Without compilerPath, cpptools falls back to C_Cpp.default.compilerPath
+    # (here a host MinGW g++), which predefines __x86_64__, _WIN64 and
+    # __SIZEOF_POINTER__=8. IDF/mbedTLS/TLSF headers branch on those, so
+    # IntelliSense parses 64-bit host branches that never exist on the target.
+    # Pointing at the cross compiler gives the real 32-bit Xtensa predefines.
+    $compilerPath = $gxxFull
     # <toolchain>/bin/xtensa-esp32s3-elf-g++.exe  ->  <toolchain>
     $tc = Split-Path -Parent (Split-Path -Parent $gxxFull)
     $gccVer = (Get-ChildItem (Join-Path $tc 'lib\gcc\xtensa-esp-elf') -Directory -ErrorAction SilentlyContinue |
@@ -99,17 +112,18 @@ if (Test-Path $gxx) {
         $elfInc = Join-Path $tc 'xtensa-esp-elf\include'
         $inc.Add($elfInc)
         $inc.Add((Join-Path $elfInc "c++\$gccVer"))
-        # 芯片专用 libstdc++ 配置头目录
+        # chip specific libstdc++ configuration header directories
         Get-ChildItem (Join-Path $elfInc "c++\$gccVer") -Directory -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -like 'xtensa-esp-elf*' } |
             ForEach-Object { $inc.Add($_.FullName); Get-ChildItem $_.FullName -Directory | ForEach-Object { $inc.Add($_.FullName) } }
     }
 
-    # ---- 交叉编译器的目标架构预定义宏 ----
-    # IDF 头文件靠这些宏选分支，例如 xtensa/config/core.h：
+    # ---- Target architecture predefined macros of the cross compiler ----
+    # IDF headers branch on these, e.g. xtensa/config/core.h:
     #   #ifdef __XTENSA__  -> #include <xtensa/hal.h>
-    #   #else              -> #include "../hal.h"     <- cpptools 会走到这里并报 1696
-    # cpptools 用宿主(x64)的预定义集合，没有 __XTENSA__，所以必须显式补上。
+    #   #else              -> #include "../hal.h"     <- cpptools takes this dead branch and reports 1696
+    # cpptools uses the host (x64) predefined set, which has no __XTENSA__, so
+    # they must be injected explicitly.
     $pre = & $gxxFull '-dM' '-E' '-x' 'c++' '-std=gnu++2b' 'NUL' 2>$null
     foreach ($line in @($pre)) {
         if ($line -match '^#define\s+(\S+)(?:\s+(.*))?$') {
@@ -121,10 +135,10 @@ if (Test-Path $gxx) {
     }
 }
 
-# ---- sketch 源目录（.ino 与生成的 .ino.cpp 同目录）----
+# ---- sketch source directory (.ino lives next to the generated .ino.cpp) ----
 $inc.Add((Join-Path $root $SketchDir))
 
-# ---- 去重、剔除不存在的目录 ----
+# ---- dedupe, drop directories that do not exist ----
 $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $finalInc = [System.Collections.Generic.List[string]]::new()
 $dropped = 0
@@ -135,28 +149,99 @@ foreach ($p in $inc) {
     if ($seen.Add($norm)) { $finalInc.Add($norm) }
 }
 
-# ---- 宏：去掉带引号/表达式的复杂值容易踩坑，全部原样保留即可 ----
+# ---- macros: keep every value verbatim ----
 $finalDef = $def | Where-Object { $_ } | Select-Object -Unique | Sort-Object
 
-# ---- 写 c_cpp_properties.json ----
-# 不写 compileCommands：
-#   compile_commands.json 里 sketch 的 file 是 arduino-cli 生成的
-#   build\AI_KEY_v3\sketch\AI_KEY_v3.ino.cpp，而不是编辑器里打开的 AI_KEY_v3.ino，
-#   cpptools 找不到就会退回 includePath 并弹提示。includePath + defines 已经是从
-#   真实编译参数展开出来的完整集合，直接用它更干净。
-$cfg = [ordered]@{
-    name            = 'Win32'
-    includePath     = @($finalInc)
-    defines         = @($finalDef)
-    cStandard       = 'gnu17'
-    cppStandard     = 'gnu++23'
-    intelliSenseMode = 'linux-gcc-x64'
+# ---- language standard: the LAST -std token wins, exactly like GCC ----
+# The esp32 core passes -std twice (currently "-std=gnu++2b ... -std=gnu++2a"),
+# so the real standard is C++20 (__cplusplus == 202002L), not gnu++23. Reading
+# it from the response-file-expanded argv keeps the config in sync with the
+# compiler instead of hardcoding a guess that goes stale on the next core bump.
+function Get-GccStandard {
+    param([string[]]$Argv, [string]$Fallback)
+    $token = $null
+    for ($i = 0; $i -lt $Argv.Count; $i++) {
+        $t = $Argv[$i]
+        if ($t -ceq '-std') {
+            if ($i + 1 -lt $Argv.Count) { $token = $Argv[$i + 1] }
+        }
+        elseif ($t -clike '-std=*') { $token = $t.Substring(5) }
+    }
+    if (-not $token) { return $Fallback }
+    # cpptools only accepts c++98..c++26 / gnu++98..gnu++26, while GCC also
+    # accepts the pre-ratification aliases 0x, 1y, 1z, 2a, 2b, 2c.
+    $year = $token -replace '^(?:gnu|c)\+\+', ''
+    $alias = @{ '0x' = '11'; '1y' = '14'; '1z' = '17'; '2a' = '20'; '2b' = '23'; '2c' = '26' }
+    if ($alias.ContainsKey($year)) { $year = $alias[$year] }
+    if ($year -notmatch '^(?:98|03|11|14|17|20|23|26)$') { return $Fallback }
+    if ($token -clike 'gnu++*') { return "gnu++$year" }
+    return "c++$year"
 }
-$json = @{ configurations = @($cfg); version = 4 } | ConvertTo-Json -Depth 6
+$cppStandard = Get-GccStandard $argv 'gnu++23'
+
+# ---- write c_cpp_properties.json ----
+# compileCommands is deliberately omitted:
+#   compile_commands.json only lists build\AI_KEY_v3\sketch\AI_KEY_v3.ino.cpp,
+#   never the AI_KEY_v3.ino the editor has open, so cpptools falls back to
+#   includePath anyway and prints a warning. includePath + defines below is
+#   already the complete set expanded from the real compile arguments.
+# ---- emit JSON by hand ----
+# ConvertTo-Json is deliberately not used: PowerShell 5.1 and 7 differ in both
+# indentation and the space after ':', so the same config would produce a
+# whole-file diff depending on which host happened to run this script.
+function ConvertTo-JsonString {
+    param([string]$s)
+    $sb = [System.Text.StringBuilder]::new()
+    foreach ($ch in $s.ToCharArray()) {
+        $code = [int]$ch
+        if ($ch -eq '\') { [void]$sb.Append('\\') }
+        elseif ($ch -eq '"') { [void]$sb.Append('\"') }
+        elseif ($code -eq 8) { [void]$sb.Append('\b') }
+        elseif ($code -eq 12) { [void]$sb.Append('\f') }
+        elseif ($code -eq 10) { [void]$sb.Append('\n') }
+        elseif ($code -eq 13) { [void]$sb.Append('\r') }
+        elseif ($code -eq 9) { [void]$sb.Append('\t') }
+        elseif ($code -lt 32) { [void]$sb.Append(('\u{0:x4}' -f $code)) }
+        else { [void]$sb.Append($ch) }
+    }
+    $sb.ToString()
+}
+
+$nl = "`r`n"
+$lines = [System.Collections.Generic.List[string]]::new()
+$lines.Add('{')
+$lines.Add('    "version": 4,')
+$lines.Add('    "configurations": [')
+$lines.Add('        {')
+$lines.Add('            "name": "Win32",')
+$lines.Add('            "includePath": [')
+for ($i = 0; $i -lt $finalInc.Count; $i++) {
+    $sep = ''
+    if ($i -lt $finalInc.Count - 1) { $sep = ',' }
+    $lines.Add('                "' + (ConvertTo-JsonString $finalInc[$i]) + '"' + $sep)
+}
+$lines.Add('            ],')
+$lines.Add('            "defines": [')
+for ($i = 0; $i -lt $finalDef.Count; $i++) {
+    $sep = ''
+    if ($i -lt $finalDef.Count - 1) { $sep = ',' }
+    $lines.Add('                "' + (ConvertTo-JsonString $finalDef[$i]) + '"' + $sep)
+}
+$lines.Add('            ],')
+if ($compilerPath) {
+    $lines.Add('            "compilerPath": "' + (ConvertTo-JsonString $compilerPath) + '",')
+}
+$lines.Add('            "cStandard": "gnu17",')
+$lines.Add('            "cppStandard": "' + $cppStandard + '",')
+$lines.Add('            "intelliSenseMode": "linux-gcc-x64"')
+$lines.Add('        }')
+$lines.Add('    ]')
+$lines.Add('}')
+$json = ($lines -join $nl) + $nl
 
 $outPath = Join-Path $PSScriptRoot 'c_cpp_properties.json'
 [System.IO.File]::WriteAllText($outPath, $json, (New-Object System.Text.UTF8Encoding($false)))
 
-Write-Host "已生成 $outPath"
-Write-Host "  include 目录: $($finalInc.Count)（跳过不存在 $($dropped)）"
-Write-Host "  宏定义:       $($finalDef.Count)"
+Write-Host "Generated $outPath"
+Write-Host "  include dirs: $($finalInc.Count) (skipped missing: $dropped)"
+Write-Host "  defines:      $($finalDef.Count)"
