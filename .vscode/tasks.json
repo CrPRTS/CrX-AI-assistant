@@ -15,7 +15,10 @@
             "label": "编译 AI_KEY_v3",
             "type": "shell",
             // 编译后刷新 IntelliSense 配置：includePath/defines 来自本次真实编译参数
-            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\AI_KEY_v3\" --output-dir \"$env:BUILD_ROOT\\out\" '${workspaceFolder}\\AI_KEY_v3'; if ($?) { & powershell -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}\\.vscode\\gen-intellisense.ps1\" }",
+            // 不要加 --output-dir / -e：esp32 core 的 savehex 钩子会往 sketch 目录里
+            // 再写一份 AI_KEY_v3\build\esp32.esp32.esp32s3\，产物就散成两处了。
+            // 最终产物本来就在 --build-path 里，upload 用 --build-path 即可。
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\AI_KEY_v3\" '${workspaceFolder}\\AI_KEY_v3'; if ($?) { & powershell -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}\\.vscode\\gen-intellisense.ps1\" }",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -47,7 +50,7 @@
             // 编译「当前打开的 .ino 所在的 sketch 文件夹」，可加 --clean 强制全量重编
             "label": "编译当前 sketch",
             "type": "shell",
-            "command": "$d = Split-Path -Parent $env:ACTIVE_SKETCH; $n = Split-Path -Leaf $d; & $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\$n\" --output-dir \"$env:BUILD_ROOT\\out\" \"$d\"",
+            "command": "$d = Split-Path -Parent $env:ACTIVE_SKETCH; $n = Split-Path -Leaf $d; & $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\$n\" \"$d\"",
             "options": {
                 "env": {
                     "ACTIVE_SKETCH": "${file}",
@@ -76,7 +79,7 @@
         {
             "label": "上传到开发板",
             "type": "shell",
-            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG upload --fqbn $env:ARDUINO_FQBN --input-dir \"$env:BUILD_ROOT\\out\" (Read-Host '串口号 (如 COM5)')",
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG upload --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\AI_KEY_v3\" (Read-Host '串口号 (如 COM5)')",
             "problemMatcher": []
         },
         {

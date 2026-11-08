@@ -1,4 +1,4 @@
-﻿# 从 arduino-cli 生成的 compile_commands.json 生成 .vscode/c_cpp_properties.json
+# 从 arduino-cli 生成的 compile_commands.json 生成 .vscode/c_cpp_properties.json
 #
 # 为什么需要这个脚本：
 #   arduino-cli 把 ESP-IDF 的 370 条 include 路径写在 gcc 响应文件里（@flags/includes，
@@ -149,7 +149,7 @@ $cfg = [ordered]@{
     includePath     = @($finalInc)
     defines         = @($finalDef)
     cStandard       = 'gnu17'
-    cppStandard     = 'gnu++2b'
+    cppStandard     = 'gnu++23'
     intelliSenseMode = 'linux-gcc-x64'
 }
 $json = @{ configurations = @($cfg); version = 4 } | ConvertTo-Json -Depth 6

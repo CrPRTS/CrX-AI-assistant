@@ -7,7 +7,7 @@ Sketch uses 320174 bytes (24%) of program storage space. Maximum is 1310720 byte
 Global variables use 23168 bytes (7%) of dynamic memory, leaving 304512 bytes.
 ```
 
-产物：`build\out\AI_KEY_v3.ino.bin` / `.elf` / `.map` / `.merged.bin`（均在仓库内）
+产物：`build\AI_KEY_v3\AI_KEY_v3.ino.bin` / `.elf` / `.map` / `.merged.bin`（均在仓库内）
 
 ---
 
@@ -19,7 +19,7 @@ Global variables use 23168 bytes (7%) of dynamic memory, leaving 304512 bytes.
 | `F:\Git\Arduino15\` | 离线平台与工具链（esp32 core 3.3.11 + esp-x32/esp-rv32 2601 + esp32s3-libs + esptool_py 5.3.1） |
 | `F:\Git\arduino-sketchbook\libraries\PN532-arduino\` | Seeed PN532（旧版，代码所依赖的版本） |
 | `F:\Git\arduino-sketchbook\libraries\NDEF\` | Seeed NDEF 1.1.0（旧版） |
-| `F:\Git\CrX-AI-assistant\build\` | 编译输出与增量缓存（`build\AI_KEY_v3\` 中间产物+缓存，`build\out\` 最终产物），已 gitignore，可随时删除重建 |
+| `F:\Git\CrX-AI-assistant\build\` | 编译输出与增量缓存（`build\AI_KEY_v3\` 中间产物 + 最终产物），已 gitignore，可随时删除重建 |
 | [`arduino-cli.yaml`](./arduino-cli.yaml) | 工程内配置，指向以上路径 |
 
 > **为什么必须在 `F:\Git` 而不是 `F:\Downloads` 或 OneDrive 里？**
@@ -38,18 +38,19 @@ Global variables use 23168 bytes (7%) of dynamic memory, leaving 304512 bytes.
 ```powershell
 F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml compile `
   --fqbn esp32:esp32:esp32s3:FlashSize=16M `
-  --build-path build\AI_KEY_v3 --output-dir build\out AI_KEY_v3
+  --build-path build\AI_KEY_v3 AI_KEY_v3
 ```
 
 上传（先确认串口号）：
 
 ```powershell
 F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml upload `
-  --fqbn esp32:esp32:esp32s3:FlashSize=16M --input-dir build\out COM5
+  --fqbn esp32:esp32:esp32s3:FlashSize=16M --build-path build\AI_KEY_v3 COM5
 ```
 
-> **所有产物只落在仓库内的 `build\`**：`--build-path` 同时是中间产物和增量缓存的位置，`--output-dir` 是最终产物，两者都指到 `build\`。
-> 只要每次都带上这两个参数，arduino-cli 就不会在仓库外写任何东西（1.5.1 已无 `build.cache_directory` 配置项）。
+> **所有产物只落在仓库内的 `build\`**：`--build-path` 同时是中间产物、增量缓存和最终产物的位置。
+> **不要加 `--output-dir` 或 `-e`**：esp32 core 的 `savehex` 钩子（`platform.txt` 第 213-239 行）会按 `{sketch_path}\build\<vendor.arch.board>\` 再复制一份 bin/elf/map/sdkconfig，产物就散成两处了。
+> 只要每次都带上 `--build-path`，arduino-cli 就不会在仓库外写任何东西（1.5.1 已无 `build.cache_directory` 配置项）。
 > 仓库外只有只读的工具链与库：`F:\Git\arduino-cli`、`F:\Git\Arduino15`、`F:\Git\arduino-sketchbook`。
 > （`%TEMP%` 里仍会有 PyInstaller 的瞬时解压文件，那是 Windows 临时目录，不是产物。）
 

@@ -448,7 +448,7 @@
                 "UNITY_INCLUDE_CONFIG_H"
             ],
             "cStandard": "gnu17",
-            "cppStandard": "gnu++2b",
+            "cppStandard": "gnu++23",
             "intelliSenseMode": "linux-gcc-x64"
         }
     ]
