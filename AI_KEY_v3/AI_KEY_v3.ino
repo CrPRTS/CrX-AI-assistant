@@ -223,29 +223,28 @@ static bool computeExpectedMac(const uint8_t* challenge, size_t chLen,
 }
 
 // ==================== NDEF 收发 ====================
-
-static bool sendChallenge(const char* challengeHex) {
-    NdefMessage request = NdefMessage();
-    request.addTextRecord(DEVICE_ID);
-    request.addTextRecord(challengeHex);
-
-    // encode() 不接收容量参数，必须自己先算长度，否则会静默写爆缓冲区
-    int encodedSize = request.getEncodedSize();
+static bool sendNdef(NdefMessage&msg){
+    int encodedSize = msg.getEncodedSize();
     if (encodedSize <= 0 ||
         encodedSize > (int)sizeof(g_requestBuf) ||
         encodedSize > 250) {                       // SNEP 单包上限
         Serial.printf("[ERR] request 编码超长: %d\n", encodedSize);
         return false;
     }
-
-    request.encode(g_requestBuf);
-
+    msg.encode(g_requestBuf);
     int8_t sent = nfc.write(g_requestBuf, (uint8_t)encodedSize, SNEP_WRITE_TIMEOUT_MS);
     if (sent <= 0) {
         Serial.printf("[ERR] nfc.write() = %d（对端未就位？）\n", (int)sent);
         return false;
     }
     return true;
+}
+
+static bool sendChallenge(const char* challengeHex) {
+    NdefMessage request = NdefMessage();
+    request.addTextRecord(DEVICE_ID);
+    request.addTextRecord(challengeHex);
+    return sendNdef(request);
 }
 
 // 从对端回写的 NDEF 中取出 32 字节 MAC
@@ -294,26 +293,9 @@ static bool extractMacFromNdef(const uint8_t* data, int len, uint8_t out[MAC_LEN
 }
 //======================秘钥传输=========================
 static bool sendAI_KEY(){
-  NdefMessage AIkey = NdefMessage();
-  AIkey.addTextRecord(AI_KEY);
-  int encodedSize = AIkey.getEncodedSize();
-    if (encodedSize <= 0 ||
-        encodedSize > (int)sizeof(g_requestBuf) ||
-        encodedSize > 250) {                       // SNEP 单包上限
-        Serial.printf("[ERR] request 编码超长: %d\n", encodedSize);
-        return false;
-    }
-
-    AIkey.encode(g_requestBuf);
-
-    int8_t sent = nfc.write(g_requestBuf, (uint8_t)encodedSize, SNEP_WRITE_TIMEOUT_MS);
-    if (sent <= 0) {
-        Serial.printf("[ERR] nfc.write() = %d（对端未就位接受密文？）\n", (int)sent);
-        return false;
-    }
-    return true;
-
-
+    NdefMessage AIkey = NdefMessage();
+    AIkey.addTextRecord(AI_KEY);
+    return sendNdef(AIkey);
 }
 
 
