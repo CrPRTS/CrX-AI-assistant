@@ -7,3 +7,6 @@ build/
 # PlatformIO（当前方案已改用 arduino-cli，保留以防回退）
 .clangd
 .vscode/cpptools*
+
+# vendored PN532: exclude upstream CI config (no effect in this repo)
+libraries/PN532/.github/

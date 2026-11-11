@@ -17,19 +17,16 @@ Global variables use 23168 bytes (7%) of dynamic memory, leaving 304512 bytes.
 |---|---|
 | `e:\ExtraAppsHDD\arduino-cli.exe` | arduino-cli 1.6.0 |
 | `F:\Git\Arduino15\` | 离线平台与工具链（esp32 core 3.3.11 + esp-x32/esp-rv32 2601 + esp32s3-libs + esptool_py 5.3.1） |
-| `CrX-AI-assistant\libraries\PN532\` | Seeed PN532 1.0.0（旧版，代码所依赖的版本），**git 子模块**（`Seeed-Studio/PN532`，钉到 commit `2c47f5c`） |
+| `CrX-AI-assistant\libraries\PN532\` | Seeed PN532 1.0.0（旧版，代码所依赖的版本），**vendored 普通目录**（原为 `Seeed-Studio/PN532` 子模块 @ commit `2c47f5c`，已降级为普通文件并提交进本仓库；`src/PN532_SPI.cpp` 打了 ESP32 1 MHz 时钟补丁） |
 | `CrX-AI-assistant\libraries\NDEF\` | Seeed NDEF 1.1.0（旧版），**git 子模块**（`don/NDEF`，tag `1.1.0`） |
 | `CrX-AI-assistant\build\` | 编译输出与增量缓存（`build\AI_KEY_v3\` 中间产物 + 最终产物），已 gitignore，可随时删除重建 |
 | [`arduino-cli.yaml`](./arduino-cli.yaml) | 工程内配置，指向以上路径 |
 | [`.vscode/gen-intellisense.ps1`](./.vscode/gen-intellisense.ps1) | 生成 IntelliSense 配置，见第 3 节 |
 
-> **库为什么都是 git 子模块？**
-> - 两个库都钉到**具体 commit / tag**，仓库本身不存内容、不占体积（符合"子模块不占 git 空间"的诉求）。
-> - `libraries\NDEF`：`don/NDEF` @ tag `1.1.0`。
-> - `libraries\PN532`：`Seeed-Studio/PN532` @ commit `2c47f5c`（`arduino` 分支上**最后一个 1.0.0 提交**，`src/` 平铺布局、带 `#ifdef NFC_INTERFACE_SPI` 守卫，与本项目已验证的 1.0.0 内容逐字节一致）。
->   - **不要钉到 tag `v1.0`**（那是 2020 年老提交，还是"按接口分目录"的旧 Seeed 布局，arduino-cli 解析不了 `#include "PN532_SPI.h"`）；
->   - **不要钉到 1.1.0**（`e44820e` 起移除了 `#ifdef` 守卫，sketch 里的 `#define NFC_INTERFACE_SPI` + `#include .cpp` 会变重复定义，见第 5 节）。
-> - 全新克隆后必须执行 `git submodule update --init`（或 `git clone --recurse-submodules`）拉取两个子模块（见第 4 节）。
+> **库的组织形式：一个子模块 + 一个 vendored 目录**
+> - `libraries\NDEF`：**git 子模块** `don/NDEF` @ tag `1.1.0`，仓库不存内容、不占体积，克隆时需 `git submodule update --init`（或 `git clone --recurse-submodules`）拉取。
+> - `libraries\PN532`：**vendored 普通目录**（原为 `Seeed-Studio/PN532` 子模块 @ commit `2c47f5c`，为打 ESP32 时钟补丁而降级为普通文件并提交进本仓库，内容与 1.0.0 逐字节一致，另加 `src/PN532_SPI.cpp` 的 1 MHz 补丁）。直接编辑即可，无子模块指针语义。
+>   - 版本要点（同 1.0.0 语义）：**不要换 tag `v1.0`**（2020 老提交，按接口分目录，arduino-cli 解析不了 `#include "PN532_SPI.h"`）；**不要换 1.1.0**（`e44820e` 起移除 `#ifdef` 守卫，sketch 的 `#define NFC_INTERFACE_SPI` + `#include .cpp` 会重复定义，见第 5 节）。
 
 ## 2. 日常用法
 
@@ -91,12 +88,12 @@ e:\ExtraAppsHDD\arduino-cli.exe --config-file arduino-cli.yaml upload `
 若换机器，重建步骤：
 
 1. 把整套 `Arduino15`（或至少 `packages\esp32\hardware\esp32\3.3.11`、`packages\esp32\tools\*`、`packages\arduino\tools\dfu-util`）放到 Downloads **之外**的目录。
-2. 克隆仓库并初始化子模块：`git clone --recurse-submodules <repo>`（或克隆后 `git submodule update --init`）。`libraries\PN532` 与 `libraries\NDEF` 都是子模块，需联网拉取。
+2. 克隆仓库并初始化子模块：`git clone --recurse-submodules <repo>`（或克隆后 `git submodule update --init`）。只有 `libraries\NDEF` 是子模块，需联网拉取；`libraries\PN532` 是 vendored 普通目录，随仓库自带、无需额外步骤。
 3. `arduino-cli.yaml` 的 `directories.data` 指向 `Arduino15`，`directories.user` 指向**本仓库根**（`libraries\` 所在目录）——见当前仓库内 yaml。
 4. `arduino-cli core list` 应显示 `esp32:esp32 3.3.11` 且无下载动作。
 5. 重新生成 IntelliSense（`Ctrl+Shift+B` 编译后自动跑 `gen-intellisense.ps1`，或命令面板「刷新 IntelliSense 配置」）。
 
-> 子模块注意：`libraries\PN532` 与 `libraries\NDEF` 的内容**不要直接改动**（改动会在 `git status` 里显示 submodule dirty）；要升级版本 = 改 `.gitmodules` 钉的 tag/commit 再 `git submodule update`。PN532 钉的是 commit `2c47f5c`（最后 1.0.0），NDEF 钉的是 tag `1.1.0`。
+> 库维护注意：`libraries\NDEF`（子模块，`don/NDEF` @ tag `1.1.0`）的内容**不要直接改动**（改动会显示 submodule dirty）；升级 = 改 `.gitmodules` 钉的 tag/commit 再 `git submodule update`。`libraries\PN532`（vendored 目录）可直接编辑、随普通提交走；如需换版本，直接替换目录内容并同步第 5 节的 `NFC_INTERFACE_SPI` 说明。
 
 ## 5. 库版本的关键坑
 
@@ -120,11 +117,11 @@ GitHub 上的**新版** Seeed 库已在头文件里默认这些宏，那种情�
 放弃原因：`dl.registry.platformio.org` 在本机只有 ~12 KB/s，`framework-arduinoespressif32` 始终下不完；
 VS Code 的 PlatformIO 扩展还会常驻 `load_build_metadata` 进程抢占 `~/.platformio` 全局锁，触发 `LockFileTimeoutError`。
 
-旧 `lib/` 里是**新版** Seeed 库，与第 5 节描述的旧库不兼容，故已删除。当前库布局（全部为 git 子模块）：
+旧 `lib/` 里是**新版** Seeed 库，与第 5 节描述的旧库不兼容，故已删除。当前库布局（一个 vendored 目录 + 一个子模块）：
 
 | 位置 | 库名（`library.properties`） | 版本 | 形式 |
 |---|---|---|---|
-| `libraries/PN532` | `PN532-Arduino` | **1.0.0** | git 子模块（`Seeed-Studio/PN532` @ commit `2c47f5c`） |
+| `libraries/PN532` | `PN532-Arduino` | **1.0.0** | vendored 普通目录（原 `Seeed-Studio/PN532` @ commit `2c47f5c`，含 ESP32 1 MHz 时钟补丁） |
 | `libraries/NDEF` | `NDEF` | 1.1.0 | git 子模块（`don/NDEF` @ tag `1.1.0`） |
 
 当前编译读取的是仓库内 `libraries/`（`arduino-cli.yaml` 的 `directories.user` 指向仓库根），
