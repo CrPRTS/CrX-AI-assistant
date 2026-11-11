@@ -9,8 +9,8 @@ directories:
   # 必须放在 Downloads 之外：PyInstaller 打包的 gen_esp32part.exe 等在 Downloads 下无法解压临时文件
   data: F:\Git\Arduino15
   downloads: F:\Git\Arduino15\staging
-  # sketchbook：libraries/ 下是 PN532-arduino 与 NDEF
-  user: F:\Git\arduino-sketchbook
+  # sketchbook：仓库内 libraries/ 子目录（git 子模块 PN532 + NDEF）
+  user: F:\Git\CrX-AI-assistant
 
 library:
   enable_unsafe_install: true

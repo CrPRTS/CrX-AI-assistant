@@ -17,15 +17,19 @@ Global variables use 23168 bytes (7%) of dynamic memory, leaving 304512 bytes.
 |---|---|
 | `F:\Git\arduino-cli\arduino-cli.exe` | arduino-cli 1.5.1 |
 | `F:\Git\Arduino15\` | 离线平台与工具链（esp32 core 3.3.11 + esp-x32/esp-rv32 2601 + esp32s3-libs + esptool_py 5.3.1） |
-| `F:\Git\arduino-sketchbook\libraries\PN532-arduino\` | Seeed PN532（旧版，代码所依赖的版本） |
-| `F:\Git\arduino-sketchbook\libraries\NDEF\` | Seeed NDEF 1.1.0（旧版） |
-| `F:\Git\CrX-AI-assistant\build\` | 编译输出与增量缓存（`build\AI_KEY_v3\` 中间产物 + 最终产物），已 gitignore，可随时删除重建 |
+| `CrX-AI-assistant\libraries\PN532\` | Seeed PN532 1.0.0（旧版，代码所依赖的版本），**git 子模块**（`Seeed-Studio/PN532`，钉到 commit `2c47f5c`） |
+| `CrX-AI-assistant\libraries\NDEF\` | Seeed NDEF 1.1.0（旧版），**git 子模块**（`don/NDEF`，tag `1.1.0`） |
+| `CrX-AI-assistant\build\` | 编译输出与增量缓存（`build\AI_KEY_v3\` 中间产物 + 最终产物），已 gitignore，可随时删除重建 |
 | [`arduino-cli.yaml`](./arduino-cli.yaml) | 工程内配置，指向以上路径 |
+| [`.vscode/gen-intellisense.ps1`](./.vscode/gen-intellisense.ps1) | 生成 IntelliSense 配置，见第 3 节 |
 
-> **为什么必须在 `F:\Git` 而不是 `F:\Downloads` 或 OneDrive 里？**
-> ESP32 core 3.x 的 `gen_esp32part.exe`、`espota.exe`、`flasher.exe`、`bin_signing.exe` 是 PyInstaller 单文件包，
-> 启动时要在自身目录解压临时文件。Windows 会阻止从 **Downloads** 目录运行的这类程序解压，
-> 报 `[PYI-xxxx:ERROR] Could not create temporary directory!`。OneDrive 目录则会同步 6.8 GB 编译产物。
+> **库为什么都是 git 子模块？**
+> - 两个库都钉到**具体 commit / tag**，仓库本身不存内容、不占体积（符合"子模块不占 git 空间"的诉求）。
+> - `libraries\NDEF`：`don/NDEF` @ tag `1.1.0`。
+> - `libraries\PN532`：`Seeed-Studio/PN532` @ commit `2c47f5c`（`arduino` 分支上**最后一个 1.0.0 提交**，`src/` 平铺布局、带 `#ifdef NFC_INTERFACE_SPI` 守卫，与本项目已验证的 1.0.0 内容逐字节一致）。
+>   - **不要钉到 tag `v1.0`**（那是 2020 年老提交，还是"按接口分目录"的旧 Seeed 布局，arduino-cli 解析不了 `#include "PN532_SPI.h"`）；
+>   - **不要钉到 1.1.0**（`e44820e` 起移除了 `#ifdef` 守卫，sketch 里的 `#define NFC_INTERFACE_SPI` + `#include .cpp` 会变重复定义，见第 5 节）。
+> - 全新克隆后必须执行 `git submodule update --init`（或 `git clone --recurse-submodules`）拉取两个子模块（见第 4 节）。
 
 ## 2. 日常用法
 
@@ -66,9 +70,16 @@ F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml upload `
 
 生成器读取真实编译参数，展开响应文件、还原 `-iwithprefixbefore`、补上交叉编译器的系统头目录，最后写出 385 个 include 目录 + 55 个宏。
 
-**何时需要重新生成**：换 FQBN、增删库、升级 core/工具链之后。`Ctrl+Shift+B` 已自动在编译成功后刷新；也可以单独跑任务「刷新 IntelliSense 配置」。
+配置里还有两项不是从 include 参数来的，但同样关键：
 
-另外必须保留 `__XTENSA__` 这组目标端宏（生成器自动注入）。否则 `xtensa/config/core.h` 会走 `#else` 分支去 `#include "../hal.h"`，`SPI.h` 那行就会报 1696「无法打开源文件 "../hal.h"」——这是假错，真编译器走的是 `#ifdef __XTENSA__` 分支。
+* **`compilerPath`** 指向 `esp-x32\2601\bin\xtensa-esp32s3-elf-g++.exe`。不写它，cpptools 会退回 `C_Cpp.default.compilerPath`（本机是宿主 MinGW g++），预定义宏就变成 `__x86_64__`、`_WIN64`、`__SIZEOF_POINTER__=8`。IDF / mbedTLS / TLSF 的头文件大量按这些宏选分支，IntelliSense 会去解析目标上根本不存在的 64 位路径。
+* **`cppStandard`** 由生成器从编译参数里取**最后一个** `-std=` 推导（GCC 语义：后者覆盖前者）。esp32 core 会传两次，当前是 `-std=gnu++2b … -std=gnu++2a`，所以实际是 C++20，配置写 `gnu++20`。cpptools 只认 `c++98`…`c++26` / `gnu++98`…`gnu++26`，GCC 的 `2a`/`2b` 别名要先映射过去。
+
+另外必须保留 `__XTENSA__` 这组目标端宏（生成器自动注入）。否则 `xtensa/config/core.h` 会走 `#else` 分支去 `#include "../hal.h"`，`SPI.h` 那行就会报 1696「无法打开源文件 "../hal.h"」——这是假错，真编译器走的是 `#ifdef __XTENSA__` 分支。设了 `compilerPath` 后 cpptools 本来也能问到这些宏，显式注入是双保险。
+
+> **改生成器时注意**：`gen-intellisense.ps1` 必须保持**纯 ASCII**。Windows PowerShell 5.1 读无 BOM 的 `.ps1` 按系统 ANSI（GBK）解码，UTF-8 中文注释会被解成乱码，其中某些字节恰好凑成 `"` 或 `\`，把注释行变成字符串边界，整个脚本语法崩掉（报「语句块或类型定义中缺少右 `}`」）。同理，输出 JSON 是手写序列化而不是 `ConvertTo-Json`，因为 PS 5.1 和 7 的缩进、冒号后空格不同，会导致整文件 diff。
+
+配置里全是本机绝对路径，换机器或升级工具链后必须重新生成。
 
 改完配置后如果红线没消失，执行命令面板的 **C/C++: Reset IntelliSense Database**（或重新加载窗口）。
 
@@ -80,9 +91,12 @@ F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml upload `
 若换机器，重建步骤：
 
 1. 把整套 `Arduino15`（或至少 `packages\esp32\hardware\esp32\3.3.11`、`packages\esp32\tools\*`、`packages\arduino\tools\dfu-util`）放到 Downloads **之外**的目录。
-2. `arduino-cli.yaml` 的 `directories.data` 指向它，`directories.user` 指向一个 sketchbook。
-3. 把 `PN532-arduino` 与 `NDEF` 放进 `<sketchbook>\libraries\`。
+2. 克隆仓库并初始化子模块：`git clone --recurse-submodules <repo>`（或克隆后 `git submodule update --init`）。`libraries\PN532` 与 `libraries\NDEF` 都是子模块，需联网拉取。
+3. `arduino-cli.yaml` 的 `directories.data` 指向 `Arduino15`，`directories.user` 指向**本仓库根**（`libraries\` 所在目录）——见当前仓库内 yaml。
 4. `arduino-cli core list` 应显示 `esp32:esp32 3.3.11` 且无下载动作。
+5. 重新生成 IntelliSense（`Ctrl+Shift+B` 编译后自动跑 `gen-intellisense.ps1`，或命令面板「刷新 IntelliSense 配置」）。
+
+> 子模块注意：`libraries\PN532` 与 `libraries\NDEF` 的内容**不要直接改动**（改动会在 `git status` 里显示 submodule dirty）；要升级版本 = 改 `.gitmodules` 钉的 tag/commit 再 `git submodule update`。PN532 钉的是 commit `2c47f5c`（最后 1.0.0），NDEF 钉的是 tag `1.1.0`。
 
 ## 5. 库版本的关键坑
 
@@ -101,11 +115,20 @@ GitHub 上的**新版** Seeed 库已在头文件里默认这些宏，那种情�
 
 ## 6. 已放弃的方案：PlatformIO
 
-`platformio.ini` / `src/main.cpp` / `lib/` 是 PlatformIO 路线的遗留物，**当前不可用**：
-`dl.registry.platformio.org` 在本机只有 ~12 KB/s，`framework-arduinoespressif32` 始终下不完；
+`platformio.ini`、`src/main.cpp`、`.pio/`、`.tools/`、`.arduino/` 均已删除，残留的 `lib/` 目录也已移除。
+
+放弃原因：`dl.registry.platformio.org` 在本机只有 ~12 KB/s，`framework-arduinoespressif32` 始终下不完；
 VS Code 的 PlatformIO 扩展还会常驻 `load_build_metadata` 进程抢占 `~/.platformio` 全局锁，触发 `LockFileTimeoutError`。
-PlatformIO 路线遗留的 `.tools/`、`.arduino/` 已删除。如确认不再回退，可继续删除 `platformio.ini`、`src/`、`lib/`、`.pio/`。
-（注意 `lib/` 里是**新版** Seeed 库，与本文第 4 节描述的旧库不兼容，别混用。）
+
+旧 `lib/` 里是**新版** Seeed 库，与第 5 节描述的旧库不兼容，故已删除。当前库布局（全部为 git 子模块）：
+
+| 位置 | 库名（`library.properties`） | 版本 | 形式 |
+|---|---|---|---|
+| `libraries/PN532` | `PN532-Arduino` | **1.0.0** | git 子模块（`Seeed-Studio/PN532` @ commit `2c47f5c`） |
+| `libraries/NDEF` | `NDEF` | 1.1.0 | git 子模块（`don/NDEF` @ tag `1.1.0`） |
+
+当前编译读取的是仓库内 `libraries/`（`arduino-cli.yaml` 的 `directories.user` 指向仓库根），
+`F:\Git\arduino-sketchbook` 不再被引用。
 
 ## 7. 尚未验证
 
