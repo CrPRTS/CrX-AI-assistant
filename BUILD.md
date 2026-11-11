@@ -15,7 +15,7 @@ Global variables use 23168 bytes (7%) of dynamic memory, leaving 304512 bytes.
 
 | 路径 | 作用 |
 |---|---|
-| `F:\Git\arduino-cli\arduino-cli.exe` | arduino-cli 1.5.1 |
+| `e:\ExtraAppsHDD\arduino-cli.exe` | arduino-cli 1.6.0 |
 | `F:\Git\Arduino15\` | 离线平台与工具链（esp32 core 3.3.11 + esp-x32/esp-rv32 2601 + esp32s3-libs + esptool_py 5.3.1） |
 | `CrX-AI-assistant\libraries\PN532\` | Seeed PN532 1.0.0（旧版，代码所依赖的版本），**git 子模块**（`Seeed-Studio/PN532`，钉到 commit `2c47f5c`） |
 | `CrX-AI-assistant\libraries\NDEF\` | Seeed NDEF 1.1.0（旧版），**git 子模块**（`don/NDEF`，tag `1.1.0`） |
@@ -40,7 +40,7 @@ Global variables use 23168 bytes (7%) of dynamic memory, leaving 304512 bytes.
 命令行等价：
 
 ```powershell
-F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml compile `
+e:\ExtraAppsHDD\arduino-cli.exe --config-file arduino-cli.yaml compile `
   --fqbn esp32:esp32:esp32s3:FlashSize=16M `
   --build-path build\AI_KEY_v3 AI_KEY_v3
 ```
@@ -48,14 +48,14 @@ F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml compile `
 上传（先确认串口号）：
 
 ```powershell
-F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml upload `
+e:\ExtraAppsHDD\arduino-cli.exe --config-file arduino-cli.yaml upload `
   --fqbn esp32:esp32:esp32s3:FlashSize=16M --build-path build\AI_KEY_v3 COM5
 ```
 
 > **所有产物只落在仓库内的 `build\`**：`--build-path` 同时是中间产物、增量缓存和最终产物的位置。
 > **不要加 `--output-dir` 或 `-e`**：esp32 core 的 `savehex` 钩子（`platform.txt` 第 213-239 行）会按 `{sketch_path}\build\<vendor.arch.board>\` 再复制一份 bin/elf/map/sdkconfig，产物就散成两处了。
 > 只要每次都带上 `--build-path`，arduino-cli 就不会在仓库外写任何东西（1.5.1 已无 `build.cache_directory` 配置项）。
-> 仓库外只有只读的工具链与库：`F:\Git\arduino-cli`、`F:\Git\Arduino15`、`F:\Git\arduino-sketchbook`。
+> 仓库外只有只读的工具链与库：`e:\ExtraAppsHDD\arduino-cli.exe`、`F:\Git\Arduino15`、`F:\Git\arduino-sketchbook`。
 > （`%TEMP%` 里仍会有 PyInstaller 的瞬时解压文件，那是 Windows 临时目录，不是产物。）
 
 ## 3. IntelliSense（`.ino` 报「检测到 #include 错误」）

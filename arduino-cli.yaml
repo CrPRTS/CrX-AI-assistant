@@ -1,5 +1,5 @@
 # arduino-cli 配置 —— 纯 VS Code 离线编译方案
-# 用法: F:\Git\arduino-cli\arduino-cli.exe --config-file arduino-cli.yaml compile -b esp32:esp32:esp32s3 AI_KEY_v3
+# 用法: e:\ExtraAppsHDD\arduino-cli.exe --config-file arduino-cli.yaml compile -b esp32:esp32:esp32s3 AI_KEY_v3
 
 board_manager:
   additional_urls: []

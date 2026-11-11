@@ -4,7 +4,7 @@
     "version": "2.0.0",
     "options": {
         "env": {
-            "ARDUINO_CLI": "F:\\Git\\arduino-cli\\arduino-cli.exe",
+            "ARDUINO_CLI": "E:\\ExtraAppsHDD\\arduino-cli.exe",
             "ARDUINO_CFG": "${workspaceFolder}\\arduino-cli.yaml",
             "ARDUINO_FQBN": "esp32:esp32:esp32s3:FlashSize=16M",
             "BUILD_ROOT": "${workspaceFolder}\\build"
