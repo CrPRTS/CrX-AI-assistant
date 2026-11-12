@@ -152,6 +152,16 @@ foreach ($p in $inc) {
 # ---- macros: keep every value verbatim ----
 $finalDef = $def | Where-Object { $_ } | Select-Object -Unique | Sort-Object
 
+# ---- force-include Arduino.h so .ino files see Arduino globals in IntelliSense ----
+# arduino-cli auto-prepends #include <Arduino.h> to every .ino, but cpptools does
+# not, so Serial/digitalWrite/delay/HIGH/LSBFIRST/... show up undeclared. Force
+# the core's Arduino.h via forcedInclude. Locate it from the resolved include dirs
+# (the directory that actually contains an Arduino.h) instead of hardcoding.
+$forced = [System.Collections.Generic.List[string]]::new()
+foreach ($p in $finalInc) {
+    if (Test-Path (Join-Path $p 'Arduino.h')) { $forced.Add((Join-Path $p 'Arduino.h')); break }
+}
+
 # ---- language standard: the LAST -std token wins, exactly like GCC ----
 # The esp32 core passes -std twice (currently "-std=gnu++2b ... -std=gnu++2a"),
 # so the real standard is C++20 (__cplusplus == 202002L), not gnu++23. Reading
@@ -228,6 +238,15 @@ for ($i = 0; $i -lt $finalDef.Count; $i++) {
     $lines.Add('                "' + (ConvertTo-JsonString $finalDef[$i]) + '"' + $sep)
 }
 $lines.Add('            ],')
+if ($forced.Count -gt 0) {
+    $lines.Add('            "forcedInclude": [')
+    for ($i = 0; $i -lt $forced.Count; $i++) {
+        $sep = ''
+        if ($i -lt $forced.Count - 1) { $sep = ',' }
+        $lines.Add('                "' + (ConvertTo-JsonString $forced[$i]) + '"' + $sep)
+    }
+    $lines.Add('            ],')
+}
 if ($compilerPath) {
     $lines.Add('            "compilerPath": "' + (ConvertTo-JsonString $compilerPath) + '",')
 }
@@ -245,3 +264,4 @@ $outPath = Join-Path $PSScriptRoot 'c_cpp_properties.json'
 Write-Host "Generated $outPath"
 Write-Host "  include dirs: $($finalInc.Count) (skipped missing: $dropped)"
 Write-Host "  defines:      $($finalDef.Count)"
+Write-Host "  forcedInc:    $($forced.Count)"
