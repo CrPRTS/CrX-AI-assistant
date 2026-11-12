@@ -47,6 +47,43 @@
             }
         },
         {
+            // 与默认「编译 AI_KEY_v3」完全一致，仅多两个 --build-property：
+            //   build.extra_flags=-DESP32=ESP32 -g0 → 末尾 -g0 覆盖 core 的 -gdwarf-4/-ggdb。
+            //     build.extra_flags 是整体替换：esp32 core 3.3.11 把 -DESP32/-DCORE_DEBUG_LEVEL/
+            //     -DARDUINO_USB_* 等塞在这个属性里（platform.txt:105）。本 sketch/库只用到
+            //     -DESP32（PN532 的 #if defined(ESP32) 1MHz 守卫依赖它），其余 7 个本代码未用，
+            //     两个带引号的 ARDUINO_HOST_OS/ARDUINO_FQBN 直接省略（避免 PowerShell 内嵌引号坑）。
+            //     值对应当前 FQBN esp32s3 + 3.3.11 默认展开；换 FQBN / 核心版本后需重跑一次校对。
+            //   compiler.c.elf.extra_flags=-Wl,-s  → 链接时 strip 符号表（.elf 更小），空属性纯追加。
+            // 烧录用 .bin 不受影响；需要 GDB/JTAG 调试时改回默认任务编译即可。
+            "label": "编译 AI_KEY_v3（无调试）",
+            "type": "shell",
+            "command": "& $env:ARDUINO_CLI --config-file $env:ARDUINO_CFG compile --fqbn $env:ARDUINO_FQBN --build-path \"$env:BUILD_ROOT\\AI_KEY_v3\" --build-property \"build.extra_flags=-DESP32=ESP32 -g0\" --build-property \"compiler.c.elf.extra_flags=-Wl,-s\" '${workspaceFolder}\\AI_KEY_v3'; if ($?) { & powershell -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}\\.vscode\\gen-intellisense.ps1\" }",
+            "group": "build",
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}\\build\\AI_KEY_v3"
+                ],
+                "pattern": [
+                    {
+                        "regexp": "^(.*?):(\\d+):(\\d+):\\s+(fatal error|error|warning|note):\\s+(.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "severity": 4,
+                        "message": 5
+                    }
+                ]
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
             // 编译「当前打开的 .ino 所在的 sketch 文件夹」，可加 --clean 强制全量重编
             "label": "编译当前 sketch",
             "type": "shell",
